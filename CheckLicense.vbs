@@ -3,7 +3,7 @@
 ' Chay hoan toan SILENT 100% (Khong Popup / Khong MsgBox / Khong Window)
 ' Xuat ket qua dong thoi ra 2 dinh dang:
 '   1. <COMPUTERNAME>.txt : Bao cao chi tiet day du
-'   2. <COMPUTERNAME>.csv : Du lieu bang de import Excel / Tong hop
+'   2. <COMPUTERNAME>.csv : Du lieu 12 cot chuan de tong hop bao cao Excel
 ' Luu ket qua vao: \\10.43.4.103\doc\33_THINH\ketquakiemtra\
 '===========================================================
 
@@ -227,35 +227,40 @@ outputTxt = outputTxt & vbCrLf
 outputTxt = outputTxt & "==========================================================" & vbCrLf
 
 '-----------------------------------------------------------
-' TAO NOI DUNG DANG BANG CSV (.CSV)
+' TAO NOI DUNG DANG BANG CSV (.CSV) - 12 COT THEO YEU CAU
+' 1. Username
+' 2. IP
+' 3. Dong may
+' 4. OS
+' 5. Installed Key
+' 6. Partial Key
+' 7. Trang thai kich hoat
+' 8. BIOS/OEM Key
+' 9. Phien ban Office
+' 10. Partial Key
+' 11. Loai ban quyen
+' 12. Trang thai kich hoat
 '-----------------------------------------------------------
 Dim csvHeader, csvRow, outputCsv
-csvHeader = "Ten may,Dong may,He dieu hanh,Edition,Product ID,Username,Dia chi IP,Win Installed Key,Win Trang thai,Win Loai key,Win Partial Key,Win BIOS Key,Office Phien ban,Office Kien truc,Office Build,Office Trang thai,Office Loai key,Office Partial Key,Thoi gian quet"
+csvHeader = "Username,IP,Dong may,OS,Installed Key,Partial Key,Trang thai kich hoat,BIOS/OEM Key,Phien ban Office,Partial Key,Loai ban quyen,Trang thai kich hoat"
 
-csvRow = EscapeCSV(computerName) & "," & _
+csvRow = EscapeCSV(userName) & "," & _
+         EscapeCSV(ipAddress) & "," & _
          EscapeCSV(computerModel) & "," & _
          EscapeCSV(osName) & "," & _
-         EscapeCSV(edition) & "," & _
-         EscapeCSV(productId) & "," & _
-         EscapeCSV(userName) & "," & _
-         EscapeCSV(ipAddress) & "," & _
          EscapeCSV(fullWinInstalledKey) & "," & _
-         EscapeCSV(winActivatedStr) & "," & _
-         EscapeCSV(winLicenseType) & "," & _
          EscapeCSV(winPartialKey) & "," & _
+         EscapeCSV(winActivatedStr) & "," & _
          EscapeCSV(fullWinBiosKey) & "," & _
          EscapeCSV(officeName) & "," & _
-         EscapeCSV(officeBit) & "," & _
-         EscapeCSV(officeVersion) & "," & _
-         EscapeCSV(officeStatus) & "," & _
-         EscapeCSV(officeType) & "," & _
          EscapeCSV(officePartialKey) & "," & _
-         EscapeCSV(timestamp)
+         EscapeCSV(officeType) & "," & _
+         EscapeCSV(officeStatus)
 
 outputCsv = csvHeader & vbCrLf & csvRow & vbCrLf
 
 '-----------------------------------------------------------
-' GHI FILE KET QUA (TXT & CSV)
+' GHI FILE KET QUA (TXT & CSV) - DUNG PURE FSO (100% RELIABLE)
 '-----------------------------------------------------------
 Dim txtPath, csvPath, targetFolder
 targetFolder = RESULT_FOLDER
@@ -273,11 +278,11 @@ On Error GoTo 0
 txtPath = targetFolder & "\" & computerName & ".txt"
 csvPath = targetFolder & "\" & computerName & ".csv"
 
-' Ghi file TXT
+' Ghi file TXT (FSO truc tiep vao share)
 Call SaveTextFile(txtPath, outputTxt)
 
-' Ghi file CSV (UTF-8 de Excel hien thi tieng Viet khong loi font)
-Call SaveTextFileUTF8(csvPath, outputCsv)
+' Ghi file CSV (Dung cung co che FSO nhu TXT, dam bao 100% thanh cong tren network share)
+Call SaveTextFile(csvPath, outputCsv)
 
 '-----------------------------------------------------------
 ' GIAI PHONG BO NHO
@@ -299,11 +304,16 @@ WScript.Quit 0
 
 Function EscapeCSV(val)
     Dim s
+    If IsNull(val) Or IsEmpty(val) Then
+        EscapeCSV = """" & """"
+        Exit Function
+    End If
     s = CStr(val)
     s = Replace(s, """", """""")
     s = Replace(s, vbCrLf, " ")
     s = Replace(s, vbCr, " ")
     s = Replace(s, vbLf, " ")
+    s = Trim(s)
     EscapeCSV = """" & s & """"
 End Function
 
@@ -316,25 +326,6 @@ Sub SaveTextFile(filePath, contentText)
     fOut.Close
     Set fOut = Nothing
     Set fsoLocal = Nothing
-    On Error GoTo 0
-End Sub
-
-Sub SaveTextFileUTF8(filePath, contentText)
-    On Error Resume Next
-    Dim objStream
-    Set objStream = CreateObject("ADODB.Stream")
-    objStream.Type = 2 ' adTypeText
-    objStream.Charset = "utf-8"
-    objStream.Open
-    objStream.WriteText contentText
-    objStream.SaveToFile filePath, 2 ' adSaveCreateOverWrite
-    objStream.Close
-    Set objStream = Nothing
-    
-    If Err.Number <> 0 Then
-        Err.Clear
-        Call SaveTextFile(filePath, contentText)
-    End If
     On Error GoTo 0
 End Sub
 
@@ -516,13 +507,13 @@ Sub ParseOsppOutput(raw, ByRef outStatus, ByRef outType, ByRef outKey)
     outKey    = "N/A"
     
     If InStr(raw, "---LICENSED---") > 0 Then
-        outStatus = "DA KICH HOAT (---LICENSED---)"
+        outStatus = "DA KICH HOAT"
     ElseIf InStr(raw, "---NOTIFICATIONS---") > 0 Then
-        outStatus = "CHUA KICH HOAT / THONG BAO (---NOTIFICATIONS---)"
+        outStatus = "CHUA KICH HOAT"
     ElseIf InStr(raw, "---OOB_GRACE---") > 0 Then
-        outStatus = "DANG DUNG THU / GRACE PERIOD (---OOB_GRACE---)"
+        outStatus = "DANG DUNG THU"
     ElseIf InStr(raw, "---UNLICENSED---") > 0 Or InStr(raw, "---NOT LICENSED---") > 0 Then
-        outStatus = "CHUA CAP PHEP (---UNLICENSED---)"
+        outStatus = "CHUA CAP PHEP"
     ElseIf InStr(raw, "ERROR CODE:") > 0 Then
         outStatus = "Loi xac thuc ban quyen"
     End If
@@ -551,9 +542,9 @@ Sub DetectOfficeWMI(ByRef outStatus, ByRef outType, ByRef outKey, ByRef outFound
     For Each objOff In colOff
         outFound = True
         If objOff.LicenseStatus = 1 Then
-            outStatus = "DA KICH HOAT (Licensed)"
+            outStatus = "DA KICH HOAT"
         Else
-            outStatus = "CHUA KICH HOAT (" & GetLicenseStatusDesc(objOff.LicenseStatus) & ")"
+            outStatus = "CHUA KICH HOAT"
         End If
         outType = Trim(objOff.Description)
         If Not IsNull(objOff.PartialProductKey) Then

@@ -1,15 +1,25 @@
 '===========================================================
 ' CheckLicense.vbs (Bao cao ban quyen Windows & MS Office)
-' Chay hoan toan silent (khong MsgBox / Khong cua so)
-' Thu thap thong tin:
-'   1. Ban quyen Windows: Installed Key (Full 25 ky tu), BIOS Key, Status, Type
-'   2. Ban quyen MS Office: Phien ban, Build/Arch, Status, License Type, Partial Key
-'   3. Thong tin may tinh: Ten may, Dong may, OS, Edition, User, IP
-'   4. Thong tin chi tiet tu slmgr (/dli, /dlv) va ospp.vbs (/dstatus)
-' Luu ket qua vao: \\10.43.4.103\doc\33_THINH\ketquakiemtra\<COMPUTERNAME>.txt
+' Chay hoan toan SILENT 100% (Khong Popup / Khong MsgBox / Khong Window)
+' Xuat ket qua dong thoi ra 2 dinh dang:
+'   1. <COMPUTERNAME>.txt : Bao cao chi tiet day du
+'   2. <COMPUTERNAME>.csv : Du lieu bang de import Excel / Tong hop
+' Luu ket qua vao: \\10.43.4.103\doc\33_THINH\ketquakiemtra\
 '===========================================================
 
 Option Explicit
+
+'-----------------------------------------------------------
+' CHONG POPUP: TU DONG CHUYEN SANG CSCRIPT //B NEU DUNG WSCRIPT
+'-----------------------------------------------------------
+If InStr(1, WScript.FullName, "wscript.exe", vbTextCompare) > 0 Then
+    Dim objSelfShell
+    Set objSelfShell = CreateObject("WScript.Shell")
+    ' Chay lai bang cscript.exe //nologo //b hoan toan an (0 = hidden)
+    objSelfShell.Run "cscript.exe //nologo //b """ & WScript.ScriptFullName & """", 0, False
+    Set objSelfShell = Nothing
+    WScript.Quit 0
+End If
 
 '-----------------------------------------------------------
 ' CAU HINH - CHINH SUA THEO MOI TRUONG CUA BAN
@@ -131,7 +141,12 @@ osppPath = FindOsppPath()
 
 If osppPath <> "" Then
     hasOffice = True
-    officeRawDstatus = RunAndCapture("cscript.exe //nologo """ & osppPath & """ /dstatus")
+    Dim officeDir, osppFile
+    officeDir = objFSO.GetParentFolderName(osppPath)
+    osppFile  = objFSO.GetFileName(osppPath)
+    
+    ' Chay ospp.vbs hoan toan an tu dung thu muc goc cua no
+    officeRawDstatus = RunScriptInDir(officeDir, osppFile, "/dstatus")
     Call ParseOsppOutput(officeRawDstatus, officeStatus, officeType, officePartialKey)
 Else
     ' Fallback qua WMI neu khong tim thay file ospp.vbs
@@ -144,11 +159,11 @@ End If
 Dim rawDli, rawDlv, sysFolder
 sysFolder = objWshShell.ExpandEnvironmentStrings("%SystemRoot%") & "\System32"
 
-rawDli = RunAndCapture("cscript.exe //nologo """ & sysFolder & "\slmgr.vbs"" /dli")
-rawDlv = RunAndCapture("cscript.exe //nologo """ & sysFolder & "\slmgr.vbs"" /dlv")
+rawDli = RunScriptInDir(sysFolder, "slmgr.vbs", "/dli")
+rawDlv = RunScriptInDir(sysFolder, "slmgr.vbs", "/dlv")
 
 '-----------------------------------------------------------
-' TAO NOI DUNG BAO CAO TONG HOP
+' TAO NOI DUNG BAO CAO TEXT (.TXT)
 '-----------------------------------------------------------
 Dim winActivatedStr
 If winIsActivated Then
@@ -157,82 +172,112 @@ Else
     winActivatedStr = "CHUA KICH HOAT - " & GetLicenseStatusDesc(winLicenseStatus)
 End If
 
-Dim output
-output = ""
-output = output & "==========================================================" & vbCrLf
-output = output & "  BAO CAO BAN QUYEN WINDOWS & MICROSOFT OFFICE" & vbCrLf
-output = output & "  Thoi gian quet       : " & timestamp & vbCrLf
-output = output & "==========================================================" & vbCrLf
-output = output & vbCrLf
+Dim outputTxt
+outputTxt = ""
+outputTxt = outputTxt & "==========================================================" & vbCrLf
+outputTxt = outputTxt & "  BAO CAO BAN QUYEN WINDOWS & MICROSOFT OFFICE" & vbCrLf
+outputTxt = outputTxt & "  Thoi gian quet       : " & timestamp & vbCrLf
+outputTxt = outputTxt & "==========================================================" & vbCrLf
+outputTxt = outputTxt & vbCrLf
 
-output = output & "--- 1. THONG TIN BAN QUYEN WINDOWS ---" & vbCrLf
-output = output & "Installed Key (Full) : " & fullWinInstalledKey & vbCrLf
-output = output & "Trang thai kich hoat : " & winActivatedStr & vbCrLf
-output = output & "Loai ban quyen       : " & winLicenseType & vbCrLf
-output = output & "Partial Key (5 ky tu): " & winPartialKey & vbCrLf
-output = output & "BIOS/OEM Key (Goc)   : " & fullWinBiosKey & vbCrLf
-output = output & "Product ID           : " & productId & vbCrLf
-output = output & vbCrLf
+outputTxt = outputTxt & "--- 1. THONG TIN THIET BI & NGUOI DUNG ---" & vbCrLf
+outputTxt = outputTxt & "Ten may              : " & computerName & vbCrLf
+outputTxt = outputTxt & "Dong may             : " & computerModel & vbCrLf
+outputTxt = outputTxt & "He dieu hanh (OS)    : " & osName & vbCrLf
+outputTxt = outputTxt & "Edition              : " & edition & vbCrLf
+outputTxt = outputTxt & "Username             : " & userName & vbCrLf
+outputTxt = outputTxt & "Dia chi IP           : " & ipAddress & vbCrLf
+outputTxt = outputTxt & vbCrLf
 
-output = output & "--- 2. THONG TIN BAN QUYEN MICROSOFT OFFICE ---" & vbCrLf
-output = output & "Phien ban Office     : " & officeName & vbCrLf
+outputTxt = outputTxt & "--- 2. TOM TAT THONG TIN BAN QUYEN WINDOWS ---" & vbCrLf
+outputTxt = outputTxt & "Installed Key (Full) : " & fullWinInstalledKey & vbCrLf
+outputTxt = outputTxt & "Trang thai kich hoat : " & winActivatedStr & vbCrLf
+outputTxt = outputTxt & "Loai ban quyen       : " & winLicenseType & vbCrLf
+outputTxt = outputTxt & "Partial Key (5 ky tu): " & winPartialKey & vbCrLf
+outputTxt = outputTxt & "BIOS/OEM Key (Goc)   : " & fullWinBiosKey & vbCrLf
+outputTxt = outputTxt & "Product ID           : " & productId & vbCrLf
+outputTxt = outputTxt & vbCrLf
+
+outputTxt = outputTxt & "--- 3. TOM TAT THONG TIN BAN QUYEN MICROSOFT OFFICE ---" & vbCrLf
+outputTxt = outputTxt & "Phien ban Office     : " & officeName & vbCrLf
 If hasOffice Then
-    output = output & "Kien truc / Version  : " & officeBit & " (Build " & officeVersion & ")" & vbCrLf
-    output = output & "Trang thai kich hoat : " & officeStatus & vbCrLf
-    output = output & "Loai ban quyen       : " & officeType & vbCrLf
-    output = output & "Partial Key (5 ky tu): " & officePartialKey & vbCrLf
+    outputTxt = outputTxt & "Kien truc / Version  : " & officeBit & " (Build " & officeVersion & ")" & vbCrLf
+    outputTxt = outputTxt & "Trang thai kich hoat : " & officeStatus & vbCrLf
+    outputTxt = outputTxt & "Loai ban quyen       : " & officeType & vbCrLf
+    outputTxt = outputTxt & "Partial Key (5 ky tu): " & officePartialKey & vbCrLf
 Else
-    output = output & "Trang thai           : Khong phat hien goi Office tren he thong" & vbCrLf
+    outputTxt = outputTxt & "Trang thai           : Khong phat hien goi Office tren he thong" & vbCrLf
 End If
-output = output & vbCrLf
+outputTxt = outputTxt & vbCrLf
 
-output = output & "--- 3. THONG TIN THIET BI & NGUOI DUNG ---" & vbCrLf
-output = output & "Ten may              : " & computerName & vbCrLf
-output = output & "Dong may             : " & computerModel & vbCrLf
-output = output & "He dieu hanh (OS)    : " & osName & vbCrLf
-output = output & "Edition              : " & edition & vbCrLf
-output = output & "Username             : " & userName & vbCrLf
-output = output & "Dia chi IP           : " & ipAddress & vbCrLf
-output = output & vbCrLf
+outputTxt = outputTxt & "--- 4. CHI TIET GIAY PHEP WINDOWS (slmgr /dli) ---" & vbCrLf
+outputTxt = outputTxt & rawDli & vbCrLf
 
-output = output & "--- 4. CHI TIET GIAY PHEP WINDOWS (slmgr /dli) ---" & vbCrLf
-output = output & rawDli & vbCrLf
+outputTxt = outputTxt & "--- 5. TOAN BO THONG TIN KICH HOAT WINDOWS (slmgr /dlv) ---" & vbCrLf
+outputTxt = outputTxt & rawDlv & vbCrLf
 
-output = output & "--- 5. TOAN BO THONG TIN KICH HOAT WINDOWS (slmgr /dlv) ---" & vbCrLf
-output = output & rawDlv & vbCrLf
-
-output = output & "--- 6. CHI TIET BAN QUYEN OFFICE (ospp.vbs /dstatus) ---" & vbCrLf
+outputTxt = outputTxt & "--- 6. CHI TIET BAN QUYEN OFFICE (ospp.vbs /dstatus) ---" & vbCrLf
 If officeRawDstatus <> "" Then
-    output = output & officeRawDstatus & vbCrLf
+    outputTxt = outputTxt & officeRawDstatus & vbCrLf
 Else
-    output = output & "(Khong co du lieu tu ospp.vbs hoac may chua cai Office)" & vbCrLf
+    outputTxt = outputTxt & "(Khong co du lieu tu ospp.vbs hoac may chua cai Office)" & vbCrLf
 End If
-output = output & vbCrLf
+outputTxt = outputTxt & vbCrLf
 
-output = output & "==========================================================" & vbCrLf
+outputTxt = outputTxt & "==========================================================" & vbCrLf
 
 '-----------------------------------------------------------
-' GHI FILE KET QUA
+' TAO NOI DUNG DANG BANG CSV (.CSV)
 '-----------------------------------------------------------
-Dim outputFile, outPath
-outPath = RESULT_FOLDER & "\" & computerName & ".txt"
+Dim csvHeader, csvRow, outputCsv
+csvHeader = "Ten may,Dong may,He dieu hanh,Edition,Product ID,Username,Dia chi IP,Win Installed Key,Win Trang thai,Win Loai key,Win Partial Key,Win BIOS Key,Office Phien ban,Office Kien truc,Office Build,Office Trang thai,Office Loai key,Office Partial Key,Thoi gian quet"
+
+csvRow = EscapeCSV(computerName) & "," & _
+         EscapeCSV(computerModel) & "," & _
+         EscapeCSV(osName) & "," & _
+         EscapeCSV(edition) & "," & _
+         EscapeCSV(productId) & "," & _
+         EscapeCSV(userName) & "," & _
+         EscapeCSV(ipAddress) & "," & _
+         EscapeCSV(fullWinInstalledKey) & "," & _
+         EscapeCSV(winActivatedStr) & "," & _
+         EscapeCSV(winLicenseType) & "," & _
+         EscapeCSV(winPartialKey) & "," & _
+         EscapeCSV(fullWinBiosKey) & "," & _
+         EscapeCSV(officeName) & "," & _
+         EscapeCSV(officeBit) & "," & _
+         EscapeCSV(officeVersion) & "," & _
+         EscapeCSV(officeStatus) & "," & _
+         EscapeCSV(officeType) & "," & _
+         EscapeCSV(officePartialKey) & "," & _
+         EscapeCSV(timestamp)
+
+outputCsv = csvHeader & vbCrLf & csvRow & vbCrLf
+
+'-----------------------------------------------------------
+' GHI FILE KET QUA (TXT & CSV)
+'-----------------------------------------------------------
+Dim txtPath, csvPath, targetFolder
+targetFolder = RESULT_FOLDER
 
 On Error Resume Next
-If Not objFSO.FolderExists(RESULT_FOLDER) Then
-    objFSO.CreateFolder(RESULT_FOLDER)
+If Not objFSO.FolderExists(targetFolder) Then
+    objFSO.CreateFolder(targetFolder)
 End If
-
-Set outputFile = objFSO.CreateTextFile(outPath, True, False)
 If Err.Number <> 0 Then
-    Dim tempPath
-    tempPath = objWshShell.ExpandEnvironmentStrings("%TEMP%") & "\LicenseCheck_" & computerName & ".txt"
+    targetFolder = objWshShell.ExpandEnvironmentStrings("%TEMP%")
     Err.Clear
-    Set outputFile = objFSO.CreateTextFile(tempPath, True, False)
 End If
 On Error GoTo 0
 
-outputFile.Write output
-outputFile.Close
+txtPath = targetFolder & "\" & computerName & ".txt"
+csvPath = targetFolder & "\" & computerName & ".csv"
+
+' Ghi file TXT
+Call SaveTextFile(txtPath, outputTxt)
+
+' Ghi file CSV (UTF-8 de Excel hien thi tieng Viet khong loi font)
+Call SaveTextFileUTF8(csvPath, outputCsv)
 
 '-----------------------------------------------------------
 ' GIAI PHONG BO NHO
@@ -247,6 +292,94 @@ Set objNetwork    = Nothing
 Set objWMIService = Nothing
 
 WScript.Quit 0
+
+'===========================================================
+' CAC HAM HO TRO GHI FILE & ESCAPE CSV
+'===========================================================
+
+Function EscapeCSV(val)
+    Dim s
+    s = CStr(val)
+    s = Replace(s, """", """""")
+    s = Replace(s, vbCrLf, " ")
+    s = Replace(s, vbCr, " ")
+    s = Replace(s, vbLf, " ")
+    EscapeCSV = """" & s & """"
+End Function
+
+Sub SaveTextFile(filePath, contentText)
+    On Error Resume Next
+    Dim fOut, fsoLocal
+    Set fsoLocal = CreateObject("Scripting.FileSystemObject")
+    Set fOut = fsoLocal.CreateTextFile(filePath, True, False)
+    fOut.Write contentText
+    fOut.Close
+    Set fOut = Nothing
+    Set fsoLocal = Nothing
+    On Error GoTo 0
+End Sub
+
+Sub SaveTextFileUTF8(filePath, contentText)
+    On Error Resume Next
+    Dim objStream
+    Set objStream = CreateObject("ADODB.Stream")
+    objStream.Type = 2 ' adTypeText
+    objStream.Charset = "utf-8"
+    objStream.Open
+    objStream.WriteText contentText
+    objStream.SaveToFile filePath, 2 ' adSaveCreateOverWrite
+    objStream.Close
+    Set objStream = Nothing
+    
+    If Err.Number <> 0 Then
+        Err.Clear
+        Call SaveTextFile(filePath, contentText)
+    End If
+    On Error GoTo 0
+End Sub
+
+'===========================================================
+' CAC HAM CHAY SCRIPT HE THONG (100% SILENT & KHONG LOI QUOTE)
+'===========================================================
+
+Function RunScriptInDir(dirPath, scriptName, switchParam)
+    On Error Resume Next
+    Dim tmpFile, batFile, result, fso2, ts, fBat
+    Set fso2 = CreateObject("Scripting.FileSystemObject")
+    
+    Randomize
+    Dim rndId
+    rndId = Int((999999 - 100000 + 1) * Rnd + 100000)
+    
+    tmpFile = objWshShell.ExpandEnvironmentStrings("%TEMP%") & "\out_" & rndId & ".tmp"
+    batFile = objWshShell.ExpandEnvironmentStrings("%TEMP%") & "\run_" & rndId & ".bat"
+    
+    Set fBat = fso2.CreateTextFile(batFile, True, False)
+    If dirPath <> "" Then
+        fBat.WriteLine "@cd /d """ & dirPath & """"
+    End If
+    ' Su dung explicitly cscript.exe //nologo //b de chong tat ca popup/dialog
+    fBat.WriteLine "@""%SystemRoot%\System32\cscript.exe"" //nologo //b """ & scriptName & """ " & switchParam & " > """ & tmpFile & """ 2>&1"
+    fBat.Close
+    
+    ' Chay file bat hoan toan an (0 = an cua so, True = doi chay xong)
+    objWshShell.Run "cmd.exe /c """"" & batFile & """""", 0, True
+    
+    result = ""
+    If fso2.FileExists(tmpFile) Then
+        Set ts = fso2.OpenTextFile(tmpFile, 1, False)
+        result = ts.ReadAll()
+        ts.Close
+        fso2.DeleteFile tmpFile, True
+    End If
+    If fso2.FileExists(batFile) Then
+        fso2.DeleteFile batFile, True
+    End If
+    
+    Set fso2 = Nothing
+    RunScriptInDir = result
+    On Error GoTo 0
+End Function
 
 '===========================================================
 ' CAC HAM LAY THONG TIN MICROSOFT OFFICE
@@ -350,7 +483,7 @@ Function FindOsppPath()
     Dim progFiles, progFilesX86, paths, p
     progFiles    = objWshShell.ExpandEnvironmentStrings("%ProgramFiles%")
     progFilesX86 = objWshShell.ExpandEnvironmentStrings("%ProgramFiles(x86)%")
-    If InStr(progFilesX86, "%") > 0 Then progFilesX86 = progFiles
+    If InStr(progFilesX86, "%") > 0 Or progFilesX86 = "" Then progFilesX86 = progFiles
     
     paths = Array( _
         progFiles    & "\Microsoft Office\root\Office16\ospp.vbs", _
@@ -390,6 +523,8 @@ Sub ParseOsppOutput(raw, ByRef outStatus, ByRef outType, ByRef outKey)
         outStatus = "DANG DUNG THU / GRACE PERIOD (---OOB_GRACE---)"
     ElseIf InStr(raw, "---UNLICENSED---") > 0 Or InStr(raw, "---NOT LICENSED---") > 0 Then
         outStatus = "CHUA CAP PHEP (---UNLICENSED---)"
+    ElseIf InStr(raw, "ERROR CODE:") > 0 Then
+        outStatus = "Loi xac thuc ban quyen"
     End If
     
     lines = Split(raw, vbCrLf)
@@ -630,27 +765,6 @@ Function ExtractEdition(osCaption)
             Exit For
         End If
     Next
-End Function
-
-Function RunAndCapture(cmd)
-    Dim tmpFile, result, fso2, ts
-    Set fso2 = CreateObject("Scripting.FileSystemObject")
-    tmpFile = objWshShell.ExpandEnvironmentStrings("%TEMP%") & "\cmd_out_" & Timer & ".tmp"
-
-    On Error Resume Next
-    objWshShell.Run "cmd.exe /c """ & cmd & """ > """ & tmpFile & """ 2>&1", 0, True
-
-    result = ""
-    If fso2.FileExists(tmpFile) Then
-        Set ts = fso2.OpenTextFile(tmpFile, 1, False)
-        result = ts.ReadAll()
-        ts.Close
-        fso2.DeleteFile tmpFile, True
-    End If
-    On Error GoTo 0
-
-    Set fso2 = Nothing
-    RunAndCapture = result
 End Function
 
 Function GetLicenseStatusDesc(statusCode)
